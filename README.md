@@ -1,5 +1,7 @@
 # Business HQ
 
+**[⬇ Download business-hq.zip](https://github.com/SPUK888/business-hq/releases/latest/download/business-hq.zip)**: unzip it and double-click `business_hq.html`.
+
 A live 3D office for a trade business. Every desk is one part of the business, and each shows its own numbers:
 
 | Desk | What it shows |
