@@ -28,3 +28,19 @@ Replace each value with your own: your business name, time zone, calls, enquirie
 
 The desks can be connected to update automatically (website analytics, Google Search Console, your
 inbox, call answering). Ask about setting that up.
+
+## Inbox Sorter (n8n workflow)
+
+`inbox_sorter_workflow.json` is an [n8n](https://n8n.io) workflow behind the **Email desk**. Every minute it:
+
+1. reads new emails sent to your enquiry address
+2. sorts each one with AI: sales enquiry, booking request, question, complaint, spam or other
+3. writes a one-line summary, an urgency level and a confidence score
+4. logs it to a Google Sheet, skipping any email it has already logged
+
+It **never changes, moves or deletes an email**. Complaints, and anything the AI is less than 80% sure about,
+are always marked **Needs Human**.
+
+**Setup:** in n8n, go to *Workflows → Import from file* and pick `inbox_sorter_workflow.json`. The yellow
+**Setup** note inside the workflow lists the five steps: your email address, Gmail, a Google AI Studio key,
+your Google Sheet, then switch it on. It comes with no logins or accounts attached; you connect your own.

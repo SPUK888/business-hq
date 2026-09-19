@@ -1,0 +1,482 @@
+{
+  "name": "Inbox Sorter - enquiry emails to Google Sheets",
+  "nodes": [
+    {
+      "id": "node-note",
+      "name": "Setup",
+      "type": "n8n-nodes-base.stickyNote",
+      "typeVersion": 1,
+      "position": [
+        -460,
+        -260
+      ],
+      "parameters": {
+        "width": 420,
+        "height": 420,
+        "content": "## Inbox Sorter - setup\n\nReads new enquiry emails, sorts each one with AI (sales enquiry, booking request, question, complaint, spam, other), and logs it to a Google Sheet. It never changes, moves or deletes an email.\n\n1. **Config**: set `gmail_query` to your enquiry address, e.g. `newer_than:2d to:hello@yourbusiness.com`\n2. **Get enquiry emails**: connect your Gmail\n3. **Classify with Gemini**: add a Header Auth credential named `x-goog-api-key` with your Google AI Studio key\n4. **Read logged IDs** and **Log to Google Sheets**: connect Google Sheets and paste your sheet URL. The sheet needs a tab called `Log` with these columns in row 1: Received At, Message ID, Thread ID, From Name, From Email, Subject, Category, Confidence, Urgency, Needs Human, Summary, Action, Reply Status, Follow-ups Sent, Next Follow-up, Last Error\n5. Test once, then switch the workflow on.\n\nComplaints, and anything the AI is under 80% sure about, are always marked **Needs Human**."
+      }
+    },
+    {
+      "parameters": {
+        "rule": {
+          "interval": [
+            {
+              "field": "minutes",
+              "minutesInterval": 1
+            }
+          ]
+        }
+      },
+      "id": "node-1",
+      "name": "Every minute",
+      "type": "n8n-nodes-base.scheduleTrigger",
+      "typeVersion": 1.3,
+      "position": [
+        0,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "assignments": {
+          "assignments": [
+            {
+              "name": "confidence_threshold",
+              "value": 0.8,
+              "type": "number"
+            },
+            {
+              "name": "gmail_query",
+              "value": "newer_than:2d to:hello@yourbusiness.com",
+              "type": "string"
+            },
+            {
+              "name": "max_emails_per_run",
+              "value": 25,
+              "type": "number"
+            }
+          ]
+        },
+        "options": {}
+      },
+      "id": "node-2",
+      "name": "Config",
+      "type": "n8n-nodes-base.set",
+      "typeVersion": 3.5,
+      "position": [
+        224,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "getAll",
+        "limit": "={{ $json.max_emails_per_run }}",
+        "simple": false,
+        "filters": {
+          "q": "={{ $json.gmail_query }}"
+        },
+        "options": {}
+      },
+      "id": "node-3",
+      "name": "Get enquiry emails",
+      "type": "n8n-nodes-base.gmail",
+      "typeVersion": 2.1,
+      "position": [
+        448,
+        0
+      ],
+      "alwaysOutputData": false
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// One clean record per site enquiry, skipping any email already in the sheet (no duplicates, inbox untouched).\nconst logged = new Set($('Read logged IDs').all().map(r => String(r.json['Message ID'] || '')).filter(Boolean));\nconst sites = $('Config').first().json.gmail_query;\nreturn $('Get enquiry emails').all()\n  .filter(item => item.json.id && !logged.has(String(item.json.id)))\n  .map(item => {\n    const m = item.json;\n    const fromText = (m.from && (m.from.text || (m.from.value && m.from.value[0] && m.from.value[0].address))) || '';\n    const toText = (m.to && (m.to.text || (m.to.value && m.to.value.map(v => v.address).join(', ')))) || '';\n    const site = (/hello@([a-z0-9.-]+)/i.exec(toText) || [null, ''])[1].toLowerCase();\n    const nameMatch = /^\"?([^\"<]+)\"?\\s*</.exec(fromText);\n    const emailMatch = /<([^>]+)>/.exec(fromText) || /([\\w.+-]+@[\\w.-]+)/.exec(fromText);\n    return { json: {\n      message_id: m.id,\n      thread_id: m.threadId,\n      received_at: m.date || new Date().toISOString(),\n      site,\n      from_name: nameMatch ? nameMatch[1].trim() : '',\n      from_email: emailMatch ? emailMatch[1] : fromText,\n      subject: m.subject || '(no subject)',\n      body: String(m.text || m.snippet || '').replace(/\\s+/g, ' ').trim().slice(0, 3000),\n    }};\n  });\n"
+      },
+      "id": "node-4",
+      "name": "Normalize",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        672,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Gemini request with a JSON schema, so the answer comes back as data, not prose.\nconst system = \"You classify customer emails for a small service business. Return JSON only. \" +\n  \"Set needs_human to true for complaints, refunds, legal or payment disputes, anything angry, or anything you are not sure about. \" +\n  \"Be honest with confidence: below 0.8 means you are guessing.\";\nreturn $input.all().map(item => ({ json: { ...item.json, gemini_request: {\n  systemInstruction: { parts: [{ text: system }] },\n  contents: [{ role: 'user', parts: [{ text: 'From: ' + item.json.from_name + ' <' + item.json.from_email + '>\\nSubject: ' + item.json.subject + '\\n\\n' + item.json.body }] }],\n  generationConfig: {\n    temperature: 0.1,\n    responseMimeType: 'application/json',\n    responseSchema: {\n      type: 'OBJECT',\n      properties: {\n        category: { type: 'STRING', enum: [\"sales_inquiry\", \"booking_request\", \"support_question\", \"complaint\", \"spam\", \"other\"] },\n        confidence: { type: 'NUMBER' },\n        summary: { type: 'STRING' },\n        urgency: { type: 'STRING', enum: ['low', 'normal', 'high'] },\n        needs_human: { type: 'BOOLEAN' }\n      },\n      required: ['category', 'confidence', 'summary', 'urgency', 'needs_human']\n    }\n  }\n}}}));\n"
+      },
+      "id": "node-5",
+      "name": "Build AI request",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        880,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "method": "POST",
+        "url": "https://generativelanguage.googleapis.com/v1beta/models/gemini-2.5-flash:generateContent",
+        "authentication": "genericCredentialType",
+        "genericAuthType": "httpHeaderAuth",
+        "sendBody": true,
+        "specifyBody": "json",
+        "jsonBody": "={{ JSON.stringify($json.gemini_request) }}",
+        "options": {}
+      },
+      "id": "node-6",
+      "name": "Classify with Gemini",
+      "type": "n8n-nodes-base.httpRequest",
+      "typeVersion": 4.4,
+      "position": [
+        1104,
+        0
+      ],
+      "onError": "continueRegularOutput"
+    },
+    {
+      "parameters": {
+        "jsCode": "\n// Never guess. A bad or missing AI answer becomes needs_human with the reason written down.\nconst cfg = $('Config').first().json;\nconst allowed = [\"sales_inquiry\", \"booking_request\", \"support_question\", \"complaint\", \"spam\", \"other\"];\nreturn $input.all().map((item, i) => {\n  const email = $('Build AI request').all()[i].json;\n  let out = { category: 'other', confidence: 0, summary: '', urgency: 'normal', needs_human: true, last_error: '' };\n  try {\n    const text = item.json.candidates[0].content.parts[0].text;\n    const a = JSON.parse(text);\n    out.category = allowed.includes(a.category) ? a.category : 'other';\n    out.confidence = Math.max(0, Math.min(1, Number(a.confidence) || 0));\n    out.summary = String(a.summary || '').slice(0, 200);\n    out.urgency = ['low', 'normal', 'high'].includes(a.urgency) ? a.urgency : 'normal';\n    out.needs_human = Boolean(a.needs_human);\n    if (!allowed.includes(a.category)) { out.needs_human = true; out.last_error = 'unknown category: ' + a.category; }\n  } catch (e) {\n    out.last_error = 'AI answer unreadable: ' + String(e.message || e).slice(0, 150);\n  }\n  // the business rule, applied here as well as in the prompt: low confidence or a complaint always goes to a person\n  if (out.confidence < Number(cfg.confidence_threshold) || out.category === 'complaint') out.needs_human = true;\n  const { gemini_request, ...clean } = email;\n  return { json: { ...clean, ...out } };\n});\n"
+      },
+      "id": "node-7",
+      "name": "Check AI answer",
+      "type": "n8n-nodes-base.code",
+      "typeVersion": 2,
+      "position": [
+        1328,
+        0
+      ]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_YOUR_GOOGLE_SHEET_URL_HERE",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Log"
+        },
+        "columns": {
+          "mappingMode": "defineBelow",
+          "value": {
+            "Received At": "={{ $json.received_at }}",
+            "Message ID": "={{ $json.message_id }}",
+            "Thread ID": "={{ $json.thread_id }}",
+            "From Name": "={{ $json.from_name }}",
+            "From Email": "={{ $json.from_email }}",
+            "Subject": "={{ ($json.site ? '[' + $json.site + '] ' : '') + $json.subject }}",
+            "Category": "={{ $json.category }}",
+            "Confidence": "={{ $json.confidence }}",
+            "Urgency": "={{ $json.urgency }}",
+            "Needs Human": "={{ $json.needs_human }}",
+            "Summary": "={{ $json.summary }}",
+            "Action": "logged",
+            "Reply Status": "none",
+            "Follow-ups Sent": "0",
+            "Next Follow-up": "",
+            "Last Error": "={{ $json.last_error }}"
+          },
+          "matchingColumns": [],
+          "schema": [
+            {
+              "id": "Received At",
+              "displayName": "Received At",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Message ID",
+              "displayName": "Message ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Thread ID",
+              "displayName": "Thread ID",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "From Name",
+              "displayName": "From Name",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "From Email",
+              "displayName": "From Email",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Subject",
+              "displayName": "Subject",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Category",
+              "displayName": "Category",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Confidence",
+              "displayName": "Confidence",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Urgency",
+              "displayName": "Urgency",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Needs Human",
+              "displayName": "Needs Human",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Summary",
+              "displayName": "Summary",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Action",
+              "displayName": "Action",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Reply Status",
+              "displayName": "Reply Status",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Follow-ups Sent",
+              "displayName": "Follow-ups Sent",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Next Follow-up",
+              "displayName": "Next Follow-up",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            },
+            {
+              "id": "Last Error",
+              "displayName": "Last Error",
+              "required": false,
+              "defaultMatch": false,
+              "display": true,
+              "type": "string",
+              "canBeUsedToMatch": true,
+              "removed": false
+            }
+          ],
+          "attemptToConvertTypes": false,
+          "convertFieldsToString": true
+        },
+        "options": {}
+      },
+      "id": "node-8",
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        1552,
+        0
+      ]
+    },
+    {
+      "id": "node-9",
+      "name": "Read logged IDs",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 4.7,
+      "position": [
+        550,
+        180
+      ],
+      "executeOnce": true,
+      "alwaysOutputData": true,
+      "parameters": {
+        "operation": "read",
+        "documentId": {
+          "__rl": true,
+          "value": "PASTE_YOUR_GOOGLE_SHEET_URL_HERE",
+          "mode": "url"
+        },
+        "sheetName": {
+          "__rl": true,
+          "mode": "name",
+          "value": "Log"
+        },
+        "filtersUI": {},
+        "options": {}
+      }
+    }
+  ],
+  "connections": {
+    "Every minute": {
+      "main": [
+        [
+          {
+            "node": "Config",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Config": {
+      "main": [
+        [
+          {
+            "node": "Get enquiry emails",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Get enquiry emails": {
+      "main": [
+        [
+          {
+            "node": "Read logged IDs",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Read logged IDs": {
+      "main": [
+        [
+          {
+            "node": "Normalize",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Normalize": {
+      "main": [
+        [
+          {
+            "node": "Build AI request",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Build AI request": {
+      "main": [
+        [
+          {
+            "node": "Classify with Gemini",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Classify with Gemini": {
+      "main": [
+        [
+          {
+            "node": "Check AI answer",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Check AI answer": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  },
+  "settings": {
+    "executionOrder": "v1"
+  }
+}
