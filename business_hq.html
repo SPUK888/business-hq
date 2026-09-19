@@ -1,0 +1,709 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Business HQ</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@500;700&family=Inter:wght@400;500;600&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg1: #0c1530; --bg2: #04070f; --ink: #e8eefc; --dim: #8a97b8; --line: rgba(160, 180, 230, .16);
+    --card: rgba(12, 19, 40, .84); --accent: #7dd3fc;
+    --head: 'Space Grotesk', system-ui, sans-serif; --body: 'Inter', system-ui, sans-serif;
+  }
+  * { box-sizing: border-box; }
+  html, body { height: 100%; margin: 0; }
+  body { background: radial-gradient(ellipse at 50% 45%, var(--bg1), var(--bg2) 72%); color: var(--ink);
+         font: 14px/1.45 var(--body); overflow: hidden; }
+  [hidden] { display: none !important; }
+  #stage { position: fixed; inset: 0; cursor: grab; }
+  #stage.drag { cursor: grabbing; }
+  .ui { position: fixed; z-index: 5; }
+  #brand { top: 18px; left: 24px; }
+  #brand h1 { font: 700 26px/1 var(--head); margin: 0; letter-spacing: .5px; }
+  #brand h1 span { color: var(--accent); }
+  #brand p { margin: 6px 0 0; color: var(--dim); font-size: 13px; }
+  #brand p b { color: var(--ink); font-weight: 600; }
+  #chips { display: flex; flex-wrap: wrap; gap: 6px; margin-top: 10px; max-width: 520px; }
+  #chips span { font-size: 12px; padding: 4px 10px; border-radius: 999px; background: var(--card); border: 1px solid var(--line); color: #c3cde6; }
+  #chips b { color: var(--ink); font: 700 13px var(--head); margin-right: 3px; }
+  #meta { top: 18px; right: 24px; display: flex; gap: 8px; align-items: center; }
+  #clock { font: 500 13px var(--head); color: var(--dim); margin-right: 4px; }
+  .btn { background: var(--card); color: var(--ink); border: 1px solid var(--line); border-radius: 999px;
+         padding: 7px 14px; font: 600 12px var(--body); cursor: pointer; backdrop-filter: blur(8px); }
+  .btn:hover { border-color: rgba(125, 211, 252, .5); }
+  .btn[aria-pressed="true"] { background: #7dd3fc; color: #04111f; border-color: #7dd3fc; }
+
+  #panel { top: 68px; right: 24px; width: 340px; max-height: calc(100vh - 92px); overflow: auto;
+           background: var(--card); border: 1px solid var(--line); border-radius: 18px; padding: 18px 18px 14px;
+           backdrop-filter: blur(14px); }
+  #panel .kicker { font: 600 11px var(--body); letter-spacing: 1.6px; text-transform: uppercase; color: var(--dim); }
+  #panel h2 { font: 700 21px/1.15 var(--head); margin: 4px 0 8px; }
+  #panel .blurb { color: #c3cde6; margin: 0 0 12px; }
+  .stats { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; margin-bottom: 14px; }
+  .stat { background: rgba(255, 255, 255, .03); border: 1px solid var(--line); border-radius: 12px; padding: 9px 11px; }
+  .stat b { display: block; font: 700 20px/1.15 var(--head); }
+  .stat span { color: var(--dim); font-size: 12px; }
+  .list { margin: 0; padding: 0; list-style: none; border-top: 1px solid var(--line); }
+  .list li { display: flex; justify-content: space-between; gap: 10px; padding: 7px 0; border-bottom: 1px solid var(--line); font-size: 13px; }
+  .list li span:last-child { color: var(--dim); white-space: nowrap; }
+  .steps { margin: 0 0 12px; padding-left: 18px; color: #c3cde6; }
+  .steps li { margin: 4px 0; }
+  .back { margin-top: 12px; }
+  .podlink { display: inline-block; margin: 0 6px 14px 0; text-decoration: none; background: var(--c); color: #0b0f1a; border-color: var(--c); font-size: 13px; padding: 9px 16px; }
+  .podlink:hover { filter: brightness(1.08); }
+  .podlink:focus-visible { outline: 2px solid var(--ink); outline-offset: 2px; }
+  .note { color: var(--dim); font-size: 12px; margin-top: 10px; }
+  .desks { display: flex; flex-wrap: wrap; gap: 5px; margin: 0 0 14px; }
+  .desks span { font-size: 11px; padding: 3px 8px; border-radius: 999px; border: 1px solid var(--line); color: #c3cde6; }
+
+  #feed { left: 24px; bottom: 20px; width: 300px; background: var(--card); border: 1px solid var(--line);
+          border-radius: 14px; padding: 10px 12px 6px; backdrop-filter: blur(12px); }
+  #feed .kicker { font: 600 10.5px var(--body); letter-spacing: 1.5px; text-transform: uppercase; color: var(--dim); margin-bottom: 4px; }
+  #feed ul { list-style: none; margin: 0; padding: 0; }
+  #feed li { display: flex; gap: 8px; align-items: baseline; padding: 3px 0; font-size: 12.5px; animation: in .5s ease; }
+  #feed li span { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  #feed li i { width: 7px; height: 7px; border-radius: 50%; flex: none; transform: translateY(-1px); }
+  #feed li em { font-style: normal; color: var(--dim); margin-left: auto; white-space: nowrap; font-size: 11.5px; }
+  @keyframes in { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+
+  .card { position: fixed; z-index: 3; width: 176px; cursor: pointer;
+          background: var(--card); border: 1px solid var(--line); border-top: 2px solid var(--c); border-radius: 12px;
+          padding: 8px 10px 7px; backdrop-filter: blur(10px); transition: opacity .3s, border-color .3s;
+          box-shadow: 0 10px 30px rgba(0, 0, 0, .35); }
+  .card:hover { border-color: var(--c); }
+  .card .h { display: flex; align-items: center; gap: 6px; font: 600 10px var(--body); letter-spacing: 1.2px; text-transform: uppercase; color: var(--c); }
+  .card .h i { width: 6px; height: 6px; border-radius: 50%; background: var(--c); box-shadow: 0 0 8px var(--c); flex: none; }
+  .card .h em { margin-left: auto; font-style: normal; color: var(--dim); letter-spacing: .5px; }
+  .card .big { font: 700 24px/1 var(--head); margin: 5px 0 1px; }
+  .card .big small { font: 500 11px var(--body); color: var(--dim); margin-left: 5px; }
+  .card .rows { margin-top: 5px; border-top: 1px solid var(--line); padding-top: 4px; }
+  .card .rows div { display: flex; justify-content: space-between; gap: 8px; font-size: 11px; color: var(--dim); padding: 1px 0; }
+  .card .rows b { color: var(--ink); font-weight: 600; white-space: nowrap; }
+  .card .foot { display: flex; align-items: center; gap: 6px; font-size: 10.5px; color: #b7c3e0; margin-top: 5px; padding-top: 4px; border-top: 1px solid var(--line); }
+  .card .foot i { width: 6px; height: 6px; border-radius: 50%; background: #22c55e; box-shadow: 0 0 6px #22c55e; flex: none; animation: blink 2s ease-in-out infinite; }
+  @keyframes blink { 50% { opacity: .35; } }
+  .card .badge { margin-top: 6px; font: 600 10.5px var(--body); color: #1a1204; background: #fbbf24; border-radius: 999px;
+                 padding: 3px 9px; display: inline-block; animation: pulse 1.2s ease-in-out infinite; }
+  @keyframes pulse { 50% { box-shadow: 0 0 0 6px rgba(251, 191, 36, 0); opacity: .75; } 0%, 100% { box-shadow: 0 0 0 0 rgba(251, 191, 36, .55); } }
+  .card.dim { display: none; }   
+  
+  body.compact .card .rows, body.compact .card .foot { display: none; }
+  body.compact .card { width: 150px; }
+  .engine { position: fixed; z-index: 2; transform: translate(-50%, -100%); pointer-events: none; text-align: center; transition: opacity .3s; }
+  .engine .n { font: 600 11px var(--body); letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); padding: 3px 10px;
+               border-radius: 999px; background: rgba(4, 8, 18, .72); border: 1px solid var(--line); }
+  .engine .s { font-size: 11.5px; color: #b7c3e0; margin-top: 4px; text-shadow: 0 1px 8px rgba(0, 0, 0, .9); }
+  .tag { position: fixed; z-index: 1; transform: translate(-50%, -100%); pointer-events: none; white-space: nowrap;
+         font: 600 8.5px var(--body); letter-spacing: .8px; text-transform: uppercase; color: #dbe4fa;
+         background: rgba(4, 8, 18, .72); border: 1px solid rgba(160, 180, 230, .14); border-left: 2px solid var(--c);
+         padding: 2px 5px; border-radius: 4px; transition: opacity .25s; }
+  #hint { left: 50%; bottom: 20px; transform: translateX(-50%); color: var(--dim); font-size: 12px; }
+  
+  #tourcap { left: 50%; bottom: 26px; transform: translateX(-50%); width: min(780px, calc(100vw - 32px)); cursor: pointer;
+             background: var(--card); border: 1px solid var(--line); border-radius: 16px; padding: 14px 22px 16px;
+             font: 500 21px/1.35 var(--head); text-align: center; backdrop-filter: blur(14px); box-shadow: 0 16px 40px rgba(0, 0, 0, .45); }
+  #tourcap small { display: block; font: 600 11px var(--body); letter-spacing: 1.5px; text-transform: uppercase; color: var(--accent); margin-bottom: 6px; }
+  #tourcap .keys { display: block; margin-top: 8px; font: 500 11px var(--body); color: var(--dim); }
+  body.present #hint, body.present #howbtn, body.present #showroom, body.present #clock, body.present #feed, body.present #homebtn { display: none; }
+  body.present #panel { width: 400px; font-size: 15.5px; max-height: calc(100vh - 250px); }  
+  body.present #panel h2 { font-size: 28px; }
+  body.present .card .big { font-size: 30px; }
+  .pkgs { margin: 0 0 14px; }
+  .pkgs-h { font: 600 11px var(--body); letter-spacing: 1.4px; text-transform: uppercase; color: var(--dim); margin-bottom: 7px; }
+  .pkgs-g { display: grid; grid-template-columns: 1fr 1fr; gap: 6px; }
+  .pkg { display: flex; flex-direction: column; gap: 2px; padding: 8px 10px; border: 1px solid var(--line); border-left: 3px solid var(--c);
+         border-radius: 9px; background: rgba(255, 255, 255, .03); color: var(--ink); text-decoration: none; }
+  .pkg b, .pkg .pkg-name { font: 600 12.5px/1.25 var(--body); color: var(--ink); text-decoration: none; }
+  .pkg .pkg-name::after { content: ' 97'; color: var(--c); }
+  .pkg .pkg-name:hover { color: var(--c); }
+  .pkg .pkg-office { color: var(--dim); }
+  .pkg .pkg-office:hover { color: var(--ink); }
+  .pkg span { font-size: 11px; color: var(--dim); }
+  a.pkg:hover { background: rgba(255, 255, 255, .08); border-color: var(--c); }
+  a.pkg:focus-visible { outline: 2px solid var(--c); outline-offset: 2px; }
+  body.present .pkg b { font-size: 14px; }
+  .list li a.rowlink { display: flex; justify-content: space-between; gap: 10px; width: 100%; color: inherit; text-decoration: none; }
+  .list li a.rowlink:hover span:first-child, .list li a.rowlink:focus-visible span:first-child { color: var(--accent); }
+  .list li a.rowlink:focus-visible { outline: 2px solid var(--accent); outline-offset: 2px; }
+  #empty { inset: 0; display: grid; place-items: center; text-align: center; padding: 20px; }
+  @media (max-width: 1300px) { #hint { display: none; } #feed li:nth-child(n+4) { display: none; } }
+  
+  @media (max-width: 640px) {
+    #panel { top: auto; bottom: 16px; right: 16px; left: 16px; width: auto; max-height: 40vh; padding: 14px; }
+    #panel .blurb, #panel .desks { display: none; }
+    #panel h2 { font-size: 18px; }
+    #feed, #clock, #brand p, #chips { display: none; }
+    #brand { left: 16px; } #meta { right: 16px; }
+    #brand h1 { font-size: 22px; }
+    #howbtn { display: none; }
+    .card { width: auto; padding: 4px 8px 5px; }
+    .card .rows, .card .h em, .card .foot { display: none; }
+    .card .h { font-size: 9px; }
+    .card .big { font-size: 17px; margin: 2px 0 0; }
+    .card .big small { display: none; }
+  }
+</style>
+</head>
+<body>
+<div id="stage"></div>
+
+<div id="brand" class="ui">
+  <h1>Business <span>HQ</span></h1>
+  <p><b id="desks">44 desks</b> · MyElliot on reception</p>
+  <div id="chips"></div>
+</div>
+<div id="meta" class="ui">
+  <span id="clock"></span>
+  <button class="btn" id="presentbtn" aria-pressed="false" title="Full-screen walk-through: arrow keys to move, Esc to stop">Present</button>
+  <button class="btn" id="howbtn" aria-pressed="false">How it works</button>
+  <button class="btn" id="showroom" hidden></button>
+</div>
+<aside id="panel" class="ui" hidden></aside>
+<div id="tourcap" class="ui" hidden></div>
+<div id="feed" class="ui"><div class="kicker">Real activity · replayed</div><ul id="feedlist"></ul></div>
+<div id="hint" class="ui">drag to turn · scroll to zoom · click a pod</div>
+
+<script src="https://cdnjs.cloudflare.com/ajax/libs/three.js/r128/three.min.js"></script>
+<script>window.BUSINESS_DATA = {
+  /* YOUR NUMBERS GO HERE - everything below is sample data. Replace each value with your own. */
+  
+  "name": "Your Business",
+  "tz": "Australia/Perth", "tzLabel": "Perth",
+  "generated": "2026-09-19T00:00:00Z",
+  "sample": true,
+  "totals": {
+    "visits": 1200, "local": 310, "enquiries": 42, "whatsapp": 18, "calls": 57, "calls_missed": 9,
+    "quotes": 31, "won": 19, "booked": 6, "pages": 40, "pages_indexed": 36,
+    "local_searches": 240, "shown": 5200, "clicks": 180, "best_pos": 4,
+    "reviews": 27, "rating": 5.0, "new_reviews": 3,
+    "customers": 140, "followups": 7,
+    "emails_in": 64, "emails_answered": 61, "auto_sorted": 0,
+    "ad_spend": 0, "ad_leads": 0
+  },
+  "sites": [{"dom": "website", "brand": "Your website", "trade": "other"}],
+  "enquiries": [["Quote quiz", 21], ["WhatsApp", 18], ["Phone", 57], ["Email", 12]],
+  "jobs": [["Quotes sent", 31], ["Jobs won", 19], ["Booked this week", 6], ["Win rate", "61%"]],
+  "events": [
+    {"t": "2026-09-19T01:10:00Z", "dom": "website", "kind": "visit", "src": "google-organic"},
+    {"t": "2026-09-19T01:40:00Z", "dom": "website", "kind": "whatsapp", "src": "direct"},
+    {"t": "2026-09-19T02:05:00Z", "dom": "website", "kind": "call", "src": "direct"},
+    {"t": "2026-09-19T02:30:00Z", "dom": "website", "kind": "visit", "src": "direct"},
+    {"t": "2026-09-19T03:00:00Z", "dom": "website", "kind": "visit", "src": "google-organic"},
+    {"t": "2026-09-19T03:20:00Z", "dom": "website", "kind": "whatsapp", "src": "google-organic"}
+  ]
+};</script>
+<script>
+(() => {
+  const D = window.BUSINESS_DATA;
+  if (!D || !window.THREE) {
+    const e = document.createElement('div'); e.id = 'empty'; e.className = 'ui';
+    e.innerHTML = '<div><h2>No data yet</h2><p>The data block at the top of this file is missing.</p></div>';
+    document.body.appendChild(e); return;
+  }
+
+  const esc = s => String(s == null ? '' : s).replace(/[&<>"']/g, c => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  const TRADE = { other: 'Trade' };
+  let showroom = false;
+  const masked = {};
+  { const n = {}; for (const s of D.sites) { n[s.trade] = (n[s.trade] || 0) + 1; masked[s.dom] = `${TRADE[s.trade] || 'Trade'} · site ${String.fromCharCode(64 + n[s.trade])}`; } }
+  const nameOf = s => showroom ? masked[s.dom] : s.brand;
+  const nameDom = d => { const s = D.sites.find(x => x.dom === d); return s ? nameOf(s) : (showroom ? 'a site' : d); };
+  const termOf = s => showroom ? (TRADE[s.trade] || 'trade') + ' search' : s.term;
+  const T = D.totals;
+  D.checkpoint = D.checkpoint || D.generated;
+  if (D.name) { document.title = D.name + ' HQ'; document.querySelector('#brand h1').innerHTML = `${esc(D.name)} <span>HQ</span>`; }
+  if (D.home) { const a = document.createElement('a'); a.className = 'btn'; a.id = 'homebtn'; a.href = D.home; a.style.textDecoration = 'none';
+                a.innerHTML = '&larr; Back'; document.getElementById('meta').prepend(a); }
+  const days = Math.max(0, Math.ceil((Date.parse(D.checkpoint) - Date.now()) / 864e5));
+  const ago = t => { const m = Math.max(0, (Date.now() - Date.parse(t)) / 6e4); return m < 60 ? Math.round(m) + 'm ago' : m < 2880 ? Math.round(m / 60) + 'h ago' : Math.round(m / 1440) + 'd ago'; };
+  const SRC = { 'google-organic': 'Google', 'bing-organic': 'Bing', facebook: 'Facebook' };
+  const srcName = s => SRC[s] || (showroom ? 'another site' : s);
+  const topSrc = () => (T.sources && T.sources.length) ? `${srcName(T.sources[0][0])} ${T.sources[0][1]}` : 'from today';
+  const count = f => D.sites.filter(f).length;
+
+  const PODS = [
+    { id: 'reception', name: 'MyElliot', color: '#f59e0b',
+      big: () => T.calls, bigLabel: 'calls',
+      rows: () => [['answered for you', T.calls - T.calls_missed], ['missed', T.calls_missed], ['answered 24/7', 'with MyElliot']],
+      roles: ['MyElliot', 'Call Router', 'Booking Clerk', 'Text-back Bot', 'Voicemail Catcher', 'Callback Timer'],
+      title: 'MyElliot · Reception', foot: 'every call answered, day or night',
+      links: [{ href: 'https://myelliot.uk/', text: 'See MyElliot in action' }],
+      blurb: 'An AI receptionist that answers every call, day or night, takes the job details, books it in and texts you the summary. No more missed calls while you are on a job.',
+      list: () => [['Calls this month', T.calls], ['Missed', T.calls_missed], ['Would be caught by MyElliot', T.calls_missed]] },
+    { id: 'leads', name: 'Enquiries', color: '#22c55e',
+      big: () => T.enquiries, bigLabel: 'enquiries',
+      rows: () => [['from WhatsApp', T.whatsapp], ['local visitors', T.local], ['top source', topSrc()]],
+      roles: ['Quote Quiz', 'WhatsApp Catcher', 'Visitor Counter', 'Source Tracker', 'Reply Timer', 'Spam Filter'],
+      title: 'Enquiries', foot: 'every enquiry in one place',
+      links: [{ href: 'https://web.whatsapp.com/', text: 'Open WhatsApp' }],
+      blurb: 'Catches every enquiry from the website, the quote quiz, WhatsApp and the phone, and shows where each one came from.',
+      list: () => (D.enquiries || []).map(([a, b]) => [a, b]) },
+    { id: 'sites', name: 'Website', color: '#3b82f6',
+      big: () => T.pages, bigLabel: 'pages',
+      rows: () => [['pages in Google', T.pages_indexed], ['visits', T.visits], ['local visitors', T.local]],
+      roles: ['Page Builder', 'Health Check', 'Speed Check', 'Security Guard', 'Image Checker', 'Copy Checker'],
+      title: 'Website', foot: 'checked every night',
+      blurb: 'Keeps the website fast, working and complete, and checks every page Google can see.',
+      list: () => [['Pages', T.pages], ['Pages in Google', T.pages_indexed], ['Visits (month)', T.visits], ['Local visitors', T.local]] },
+    { id: 'rankings', name: 'SEO desk', color: '#a78bfa',
+      big: () => T.local_searches, bigLabel: 'local searches',
+      rows: () => [['shown in Google', T.shown], ['clicks from Google', T.clicks], ['best position', '#' + T.best_pos]],
+      roles: ['Search Watcher', 'Position Checker', 'Index Watcher', 'Competitor Spy', 'Keyword Finder'],
+      title: 'SEO desk', foot: 'what local people search for',
+      links: [{ href: 'https://search.google.com/search-console', text: 'Open Google Search Console' }],
+      blurb: 'Shows what people near you type into Google, how often your site appears, and where it ranks.',
+      list: () => [['Local searches (28 days)', T.local_searches], ['Times shown in Google', T.shown], ['Clicks', T.clicks], ['Best position', '#' + T.best_pos]] },
+    { id: 'studio', name: 'Reviews', color: '#f472b6',
+      big: () => T.reviews, bigLabel: 'Google reviews',
+      rows: () => [['rating', T.rating.toFixed(1) + ' / 5'], ['new this month', T.new_reviews], ['asked after every job', 'yes']],
+      roles: ['Review Asker', 'Reply Writer', 'Rating Watcher', 'Photo Collector'],
+      title: 'Reviews', foot: 'a review asked for after every job',
+      links: [{ href: 'https://business.google.com/', text: 'Open Google Business Profile' }],
+      blurb: 'Asks every happy customer for a review, replies to each one, and keeps the rating visible where people decide.',
+      list: () => [['Google reviews', T.reviews], ['Rating', T.rating.toFixed(1) + ' / 5'], ['New this month', T.new_reviews]] },
+    { id: 'jobs', name: 'Jobs', color: '#2dd4bf',
+      big: () => T.won, bigLabel: 'jobs won',
+      rows: () => [['quotes sent', T.quotes], ['booked this week', T.booked], ['win rate', Math.round(100 * T.won / Math.max(1, T.quotes)) + '%']],
+      roles: ['Quote Writer', 'Booking Diary', 'Job Tracker', 'Invoice Chaser', 'Follow-up Timer'],
+      title: 'Jobs', foot: 'from enquiry to booked job',
+      blurb: 'Tracks every quote from sent to won, and every job from booked to paid.',
+      list: () => (D.jobs || []).map(([a, b]) => [a, b]) },
+    { id: 'crm', name: 'Customers', color: '#ef4444',
+      big: () => T.customers, bigLabel: 'customers',
+      rows: () => [['follow-ups due', T.followups], ['repeat customers', 'tracked'], ['service reminders', 'ready']],
+      roles: ['Customer Book', 'Follow-up Chaser', 'Reminder Bot', 'Job Notes', 'Contact Book'],
+      title: 'Customers', foot: 'every customer in one place',
+      blurb: 'Keeps every customer, every job and every follow-up in one place, so repeat work and referrals are never missed.',
+      list: () => [['Customers', T.customers], ['Follow-ups due', T.followups]] },
+    { id: 'email', name: 'Email desk', color: '#cbd5e1',
+      big: () => T.emails_in, bigLabel: 'emails in',
+      rows: () => [['answered', T.emails_answered], ['sorted automatically', T.auto_sorted || 'ready to connect'], ['spam removed', 'yes']],
+      roles: ['Inbox Sorter', 'Reply Drafter', 'Follow-up Bot', 'Spam Filter'],
+      title: 'Email desk', foot: 'every email sorted and answered',
+      blurb: 'Reads every enquiry email, sorts it (quote, booking, question or spam) and drafts a reply for you to send.',
+      list: () => [['Emails in', T.emails_in], ['Answered', T.emails_answered], ['Sorted automatically', T.auto_sorted || 'ready to connect']] },
+    { id: 'ads', name: 'Ads desk', color: '#fb923c',
+      big: () => T.ad_leads, bigLabel: 'leads from ads',
+      rows: () => [['spend', '$' + T.ad_spend], ['cost per lead', T.ad_leads ? '$' + Math.round(T.ad_spend / T.ad_leads) : '-'], ['tracking', 'every lead']],
+      roles: ['Campaign Planner', 'Budget Guard', 'Ad Writer', 'Click Checker'],
+      title: 'Ads desk', foot: 'every ad lead traced to its keyword',
+      links: [{ href: 'https://ads.google.com/', text: 'Open Google Ads' }],
+      blurb: 'Runs ads when you want more work, and traces every lead back to the keyword that paid for it.',
+      list: () => [['Spend', '$' + T.ad_spend], ['Leads from ads', T.ad_leads]] },
+  ];
+  const DESKS = PODS.reduce((n, p) => n + p.roles.length, 0);
+  document.getElementById('desks').textContent = DESKS + ' desks';
+
+  document.getElementById('chips').innerHTML = [[T.enquiries, 'enquiries'], [T.calls, 'calls'], [T.won, 'jobs won'], [T.reviews, 'reviews'], [T.local_searches, 'local searches']]
+    .map(([v, l]) => `<span><b>${esc(v)}</b>${esc(l)}</span>`).join('');
+
+  const stage = document.getElementById('stage');
+  const panel = document.getElementById('panel');
+  let renderer;
+  try { renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true }); }
+  catch (err) {
+    const e = document.createElement('div'); e.id = 'empty'; e.className = 'ui';
+    e.innerHTML = '<div><h2>The 3D office could not start</h2><p>This browser has 3D graphics (WebGL) switched off or unavailable. Reload the page, or open it in Chrome, Edge or Safari.</p></div>';
+    document.body.appendChild(e); return;
+  }
+  renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
+  stage.appendChild(renderer.domElement);
+  const scene = new THREE.Scene();
+  const cam = new THREE.OrthographicCamera(-1, 1, 1, -1, -200, 400);
+  scene.add(new THREE.HemisphereLight(0xbcd7ff, 0x0b1020, 0.95));
+  const sun = new THREE.DirectionalLight(0xffffff, 0.75); sun.position.set(12, 24, 9); scene.add(sun);
+
+  const matDesk = new THREE.MeshStandardMaterial({ color: 0xd7dcea, roughness: 0.7 });
+  const matDark = new THREE.MeshStandardMaterial({ color: 0x1f2937, roughness: 0.6 });
+  const matChair = new THREE.MeshStandardMaterial({ color: 0x334155, roughness: 0.8 });
+  const matDeck = new THREE.MeshStandardMaterial({ color: 0x18213d, roughness: 0.55, metalness: 0.25 });
+  const SKIN = [0xf1c27d, 0xe0ac69, 0xc68642, 0x8d5524, 0xffdbac];
+  const SHIRT = [0xe2e8f0, 0x60a5fa, 0xfca5a5, 0x86efac, 0xfde68a, 0xc4b5fd, 0x94a3b8];
+  const box = (w, h, d, m) => new THREE.Mesh(new THREE.BoxGeometry(w, h, d), m);
+
+  function makeWorker(color, idx, big) {
+    const w = new THREE.Group();
+    const desk = box(0.95, 0.07, 0.5, matDesk); desk.position.set(0, 0.62, -0.42); w.add(desk);
+    for (const x of [-0.42, 0.42]) { const l = box(0.05, 0.6, 0.45, matDark); l.position.set(x, 0.3, -0.42); w.add(l); }
+    const mon = box(0.54, 0.36, 0.04, matDark); mon.position.set(0, 0.93, -0.58); w.add(mon);
+    const scrMat = new THREE.MeshBasicMaterial({ color: new THREE.Color(color) });
+    const scr = new THREE.Mesh(new THREE.PlaneGeometry(0.47, 0.29), scrMat); scr.position.set(0, 0.93, -0.556); w.add(scr);
+    const seat = box(0.4, 0.06, 0.4, matChair); seat.position.set(0, 0.36, 0.2); w.add(seat);
+    const back = box(0.4, 0.42, 0.06, matChair); back.position.set(0, 0.6, 0.4); w.add(back);
+    const shirt = new THREE.MeshStandardMaterial({ color: SHIRT[idx % SHIRT.length], roughness: 0.8 });
+    const body = new THREE.Mesh(new THREE.CylinderGeometry(0.16, 0.21, 0.5, 12), shirt); body.position.set(0, 0.64, 0.18); w.add(body);
+    const head = new THREE.Mesh(new THREE.SphereGeometry(0.15, 16, 12), new THREE.MeshStandardMaterial({ color: SKIN[(idx * 3) % SKIN.length], roughness: 0.7 }));
+    head.position.set(0, 1.03, 0.16); w.add(head);
+    const hair = new THREE.Mesh(new THREE.SphereGeometry(0.155, 16, 8, 0, Math.PI * 2, 0, Math.PI / 2), matDark);
+    hair.position.copy(head.position); hair.position.y += 0.02; w.add(hair);
+    const arms = [];
+    for (const x of [-0.19, 0.19]) { const a = box(0.07, 0.07, 0.36, shirt); a.position.set(x, 0.74, -0.02); w.add(a); arms.push(a); }
+    if (big) {
+      const band = new THREE.Mesh(new THREE.TorusGeometry(0.17, 0.02, 8, 20, Math.PI), new THREE.MeshBasicMaterial({ color }));
+      band.position.copy(head.position); band.rotation.y = Math.PI / 2; w.add(band);
+      const mic = box(0.03, 0.03, 0.16, new THREE.MeshBasicMaterial({ color })); mic.position.set(0.15, 0.97, 0.06); w.add(mic);
+      w.scale.setScalar(1.4);
+    }
+    w.userData = { head, arms, scrMat, base: new THREE.Color(color), phase: Math.random() * 6.28, headY: head.position.y };
+    return w;
+  }
+
+  const R = 13.5, HUB = 4.2, POD_R = 3.6, CORE = new THREE.Vector3(0, 2.1, 0);
+  const pods = [], pickables = [], tags = [];
+
+  const hub = new THREE.Mesh(new THREE.CylinderGeometry(HUB, HUB - 0.3, 0.4, 6), matDeck); hub.position.y = 0.05; scene.add(hub);
+  const hubRim = new THREE.Mesh(new THREE.TorusGeometry(HUB + 0.1, 0.05, 6, 6), new THREE.MeshBasicMaterial({ color: 0x7dd3fc }));
+  hubRim.rotation.set(Math.PI / 2, 0, Math.PI / 2); hubRim.position.y = 0.26; scene.add(hubRim);
+  const hubTop = new THREE.Mesh(new THREE.CylinderGeometry(HUB - 0.12, HUB - 0.12, 0.04, 6), new THREE.MeshStandardMaterial({ color: 0x0f1a33, emissive: 0x38bdf8, emissiveIntensity: 0.08 }));
+  hubTop.position.y = 0.27; scene.add(hubTop);
+
+  PODS.forEach((def, i) => {
+    const ang = i * (Math.PI * 2 / PODS.length) + Math.PI / PODS.length;
+    const dir = new THREE.Vector3(Math.sin(ang), 0, Math.cos(ang));
+    const g = new THREE.Group(); g.position.copy(dir).multiplyScalar(R); scene.add(g);
+    const col = new THREE.Color(def.color);
+    const base = new THREE.Mesh(new THREE.CylinderGeometry(POD_R, POD_R - 0.3, 0.5, 6), matDeck);
+    const topMat = new THREE.MeshStandardMaterial({ color: col.clone().multiplyScalar(0.28), emissive: col, emissiveIntensity: 0.1, roughness: 0.85 });
+    const top = new THREE.Mesh(new THREE.CylinderGeometry(POD_R - 0.15, POD_R - 0.15, 0.06, 6), topMat); top.position.y = 0.28;
+    const rim = new THREE.Mesh(new THREE.TorusGeometry(POD_R + 0.02, 0.05, 6, 6), new THREE.MeshBasicMaterial({ color: col }));
+    rim.rotation.set(Math.PI / 2, 0, Math.PI / 2); rim.position.y = 0.26;
+    const glow = new THREE.Mesh(new THREE.CircleGeometry(3.4, 6), new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.12 }));
+    glow.rotation.set(-Math.PI / 2, 0, Math.PI / 2); glow.position.y = -1.4;
+    g.add(base, top, rim, glow);
+    base.userData.pod = top.userData.pod = i; pickables.push(base, top);
+
+    const workers = [];
+    const ring = def.roles.slice();
+    if (def.id === 'reception') {
+      const w = makeWorker(def.color, 0, true); w.position.y = 0.31; w.rotation.y = ang + Math.PI; g.add(w); workers.push(w);
+      addTag(w, ring.shift(), def.color, i, true);
+    }
+    ring.forEach((role, k) => {
+      const a = (k / ring.length) * Math.PI * 2 + ang + Math.PI / ring.length, r = def.id === 'reception' ? 2.45 : 2.3;
+      const w = makeWorker(def.color, i * 7 + k + 1, false); w.position.set(Math.sin(a) * r, 0.31, Math.cos(a) * r); w.rotation.y = a; g.add(w); workers.push(w);
+      addTag(w, role, def.color, i, false);
+    });
+
+    const inner = HUB * Math.cos(Math.PI / 6), outer = R - (POD_R - 0.15) * Math.cos(Math.PI / 6), L = outer - inner, mid = (outer + inner) / 2;
+    const walk = new THREE.Group(); walk.position.copy(dir).multiplyScalar(mid); walk.rotation.y = ang; scene.add(walk);
+    const deck = box(1.3, 0.14, L, matDeck); deck.position.y = 0.16; walk.add(deck);
+    const edgeMat = new THREE.MeshBasicMaterial({ color: col, transparent: true, opacity: 0.5 });
+    for (const x of [-0.63, 0.63]) { const e = box(0.05, 0.03, L, edgeMat); e.position.set(x, 0.25, 0); walk.add(e); }
+    const lampMat = new THREE.MeshBasicMaterial({ color: col });
+    for (let s = -1; s <= 1; s++) { const lamp = box(0.12, 0.05, 0.12, lampMat); lamp.position.set(0, 0.25, s * L / 3); walk.add(lamp); }
+
+    const curve = new THREE.CatmullRomCurve3([
+      dir.clone().multiplyScalar(R - 1.2).setY(0.9), dir.clone().multiplyScalar(outer).setY(0.5),
+      dir.clone().multiplyScalar(inner).setY(0.5), CORE.clone()]);
+
+    const card = document.createElement('div'); card.className = 'card'; card.style.setProperty('--c', def.color);
+    card.addEventListener('pointerdown', () => { card.dataset.down = '1'; });
+    card.addEventListener('click', () => { if (card.dataset.down !== '1') return; card.dataset.down = ''; focusPod(i); });
+    document.body.appendChild(card);
+    pods.push({ def, g, dir, topMat, edgeMat, workers, curve, card, flash: 0, badgeUntil: 0, badgeText: '' });
+  });
+
+  function addTag(worker, role, color, podIdx, big) {
+    const el = document.createElement('div'); el.className = 'tag'; el.style.setProperty('--c', color); el.textContent = role;
+    if (big) { el.style.fontSize = '10px'; el.style.color = color; }
+    document.body.appendChild(el);
+    tags.push({ el, worker, podIdx, big });
+  }
+
+  const core = new THREE.Group(); core.position.copy(CORE); scene.add(core);
+  const gem = new THREE.Mesh(new THREE.IcosahedronGeometry(1.5, 0), new THREE.MeshStandardMaterial({ color: 0x0ea5e9, emissive: 0x38bdf8, emissiveIntensity: 0.55, flatShading: true, roughness: 0.3 }));
+  const wire = new THREE.Mesh(new THREE.IcosahedronGeometry(1.75, 1), new THREE.MeshBasicMaterial({ color: 0x7dd3fc, wireframe: true, transparent: true, opacity: 0.25 }));
+  const ring1 = new THREE.Mesh(new THREE.TorusGeometry(2.5, 0.03, 8, 80), new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.6 }));
+  const ring2 = ring1.clone(); ring2.scale.setScalar(1.25);
+  core.add(gem, wire, ring1, ring2);
+  const beam = new THREE.Mesh(new THREE.CylinderGeometry(0.08, 0.5, 1.8, 16, 1, true), new THREE.MeshBasicMaterial({ color: 0x7dd3fc, transparent: true, opacity: 0.18, side: THREE.DoubleSide }));
+  beam.position.y = 1.05; scene.add(beam);
+  const engineLabel = document.createElement('div'); engineLabel.className = 'engine';
+  engineLabel.innerHTML = `<div class="n">The engine</div><div class="s">website · MyElliot · ${DESKS} desks</div>`;
+  document.body.appendChild(engineLabel);
+
+  const pulses = [];
+  const pulseGeo = new THREE.SphereGeometry(0.18, 12, 10);
+  function pulse(podIdx) {
+    const p = pods[podIdx];
+    const m = new THREE.Mesh(pulseGeo, new THREE.MeshBasicMaterial({ color: new THREE.Color(p.def.color) }));
+    scene.add(m); pulses.push({ m, p, t: 0 }); p.flash = 1;
+  }
+
+  let azim = Math.PI / 4, elev = 0.62, zoom = 1, zoomGoal = 1, pxPerUnit = 20;
+  const target = new THREE.Vector3(), targetGoal = new THREE.Vector3();
+  let focus = -1;
+  function frame() {
+    const w = stage.clientWidth, h = stage.clientHeight, wide = w > 640;
+    const panelW = (!panel.hidden && wide) ? panel.offsetWidth + 48 : 0;
+    const cardW = wide ? 110 : 40, cardH = wide ? 50 : 20, top = wide ? 90 : 60, bottom = wide ? 10 : 10;
+    const span = 2 * (R + POD_R);
+    let s = Math.min((w - panelW - 2 * cardW - 20) / span, (h - top - bottom - 2 * cardH) / (span * Math.sin(elev) + 3));
+    s = Math.max(6, s);
+    pxPerUnit = s * zoom;
+    const vW = w / pxPerUnit, vH = h / pxPerUnit;
+    const offX = (panelW / 2) / pxPerUnit, offY = ((top - bottom) / 2) / pxPerUnit;
+    cam.left = -vW / 2 + offX; cam.right = vW / 2 + offX; cam.top = vH / 2 + offY; cam.bottom = -vH / 2 + offY;
+    cam.updateProjectionMatrix();
+    const r = 90;
+    cam.position.set(target.x + r * Math.cos(elev) * Math.sin(azim), target.y + r * Math.sin(elev), target.z + r * Math.cos(elev) * Math.cos(azim));
+    cam.lookAt(target);
+  }
+  function resize() { renderer.setSize(stage.clientWidth, stage.clientHeight); }
+  let compact = false, fitCheck = 60;
+  const setCompact = on => { compact = on; document.body.classList.toggle('compact', on); };
+  const refit = () => { setCompact(false); fitCheck = 60; };
+  window.addEventListener('resize', () => { resize(); refit(); }); resize();
+
+  let down = null, moved = 0;
+  stage.addEventListener('pointerdown', e => { down = { x: e.clientX, y: e.clientY }; moved = 0; stage.classList.add('drag'); stage.setPointerCapture(e.pointerId); });
+  stage.addEventListener('pointermove', e => {
+    if (!down) return;
+    const dx = e.clientX - down.x, dy = e.clientY - down.y; moved += Math.abs(dx) + Math.abs(dy);
+    azim -= dx * 0.006; elev = Math.min(1.2, Math.max(0.3, elev + dy * 0.004)); down = { x: e.clientX, y: e.clientY };
+  });
+  stage.addEventListener('pointerup', e => {
+    if (!down) return;
+    stage.classList.remove('drag'); const wasClick = moved < 6; down = null;
+    if (!wasClick) return;
+    const rect = stage.getBoundingClientRect();
+    const ndc = new THREE.Vector2(((e.clientX - rect.left) / rect.width) * 2 - 1, -((e.clientY - rect.top) / rect.height) * 2 + 1);
+    const ray = new THREE.Raycaster(); ray.setFromCamera(ndc, cam);
+    const hit = ray.intersectObjects(pickables, false)[0];
+    hit ? focusPod(hit.object.userData.pod) : focusPod(-1);
+  });
+  stage.addEventListener('wheel', e => { e.preventDefault(); zoomGoal = Math.min(3.2, Math.max(0.6, zoomGoal * (e.deltaY > 0 ? 0.9 : 1.1))); }, { passive: false });
+  window.addEventListener('keydown', e => { if (e.key === 'Escape') focusPod(-1); if (e.key >= '1' && e.key <= String(PODS.length)) focusPod(+e.key - 1); });
+
+  const howBtn = document.getElementById('howbtn');
+  let howOpen = window.innerWidth > 1000;
+  howBtn.setAttribute('aria-pressed', String(howOpen));
+  howBtn.onclick = () => { howOpen = !howOpen; focusPod(-1); };
+  function focusPod(i) {
+    focus = i;
+    if (i >= 0) howOpen = false;
+    howBtn.setAttribute('aria-pressed', String(howOpen));
+    if (i < 0) { targetGoal.set(0, 0, 0); zoomGoal = 1; } else { targetGoal.copy(pods[i].g.position); zoomGoal = 2.1; }
+    refit();
+    renderPanel(); renderCards();
+  }
+
+  const presentBtn = document.getElementById('presentbtn'), cap = document.getElementById('tourcap');
+  const TOUR = [
+    [null, D.name ? D.name + ' HQ' : 'Business HQ', 'Every desk here is a part of the business, and every number updates on its own.'],
+    ['rankings', 'SEO desk', `Local people are finding us on Google: ${T.local_searches} local searches this month.`],
+    ['sites', 'Website', 'The website is checked every night, so it is always fast and working.'],
+    ['leads', 'Enquiries', 'Every enquiry lands in one place, and we know where each one came from.'],
+    ['reception', 'MyElliot', 'MyElliot answers every call, day or night, and books the job in.'],
+    ['jobs', 'Jobs', 'Every quote is tracked from sent to won.'],
+    ['studio', 'Reviews', 'Every happy customer is asked for a review.'],
+    ['crm', 'Customers', 'Every customer and follow-up is kept, so repeat work is never missed.'],
+    ['email', 'Email desk', 'Every email is sorted and a reply drafted.'],
+    ['ads', 'Ads desk', 'When we want more work, ads switch on and every lead is traced to its keyword.'],
+  ];
+  let presenting = false, tourAt = 0;
+  function tourGo(k) {
+    tourAt = Math.max(0, Math.min(TOUR.length - 1, k));
+    const [id, head, line] = TOUR[tourAt];
+    howOpen = false;
+    focusPod(id ? PODS.findIndex(p => p.id === id) : -1);
+    cap.innerHTML = `<small>${tourAt + 1} of ${TOUR.length} · ${esc(head)}</small>${esc(line)}<span class="keys">&larr; &rarr; to move · Esc to stop</span>`;
+    cap.hidden = false;
+  }
+  function setPresent(on) {
+    presenting = on;
+    document.body.classList.toggle('present', on);
+    presentBtn.setAttribute('aria-pressed', String(on));
+    presentBtn.textContent = on ? 'Stop presenting' : 'Present';
+    if (on) {
+      try { const r = document.documentElement.requestFullscreen && document.documentElement.requestFullscreen(); if (r && r.catch) r.catch(() => {}); } catch (err) {}
+      tourGo(0);
+    } else {
+      cap.hidden = true;
+      try { if (document.fullscreenElement) document.exitFullscreen(); } catch (err) {}
+      focusPod(-1);
+    }
+  }
+  presentBtn.onclick = () => setPresent(!presenting);
+  cap.addEventListener('click', () => tourGo(tourAt + 1));
+  document.addEventListener('fullscreenchange', () => { if (!document.fullscreenElement && presenting) setPresent(false); });
+  window.addEventListener('keydown', e => {
+    if (!presenting) return;
+    if (['ArrowRight', 'PageDown', ' '].includes(e.key)) { e.preventDefault(); e.stopImmediatePropagation(); tourGo(tourAt + 1); }
+    else if (['ArrowLeft', 'PageUp'].includes(e.key)) { e.preventDefault(); e.stopImmediatePropagation(); tourGo(tourAt - 1); }
+    else if (e.key === 'Escape') { e.stopImmediatePropagation(); setPresent(false); }
+  }, true);
+
+  function stat(v, l) { return `<div class="stat"><b>${esc(v)}</b><span>${esc(l)}</span></div>`; }
+  function renderPanel() {
+    if (focus < 0 && !howOpen) { panel.hidden = true; return; }
+    panel.hidden = false;
+    if (focus < 0) {
+      panel.innerHTML = `<div class="kicker">Whole office</div><h2>How the office works</h2>
+        <ol class="steps"><li>The <b>website</b> brings local people looking for the trade.</li>
+        <li>The <b>Enquiries desk</b> catches every quote request and WhatsApp.</li>
+        <li><b>MyElliot</b> answers every call, day or night.</li>
+        <li>Every <b>job</b> is tracked from quote to review.</li></ol>
+        <div class="stats">${stat(T.enquiries, 'enquiries')}${stat(T.calls, 'calls')}${stat(T.won, 'jobs won')}${stat(T.reviews, 'reviews')}${stat(T.local_searches, 'local searches')}${stat('#' + T.best_pos, 'best Google position')}</div>
+        <div class="note">${D.sample ? 'Sample numbers - replace them in the data block at the top of the file. ' : ''}Click a pod or its card, or press 1-${PODS.length}.</div>
+        <button class="btn back" id="back">Close</button>`;
+    } else {
+      const p = PODS[focus];
+      const rows = p.list().slice(0, 30).map(([a, b, h]) => h
+        ? `<li><a class="rowlink" href="${esc(h)}"${/^https?:/.test(h) ? ' target="_blank" rel="noopener"' : ''}><span>${esc(a)}</span><span>${esc(b)} &rarr;</span></a></li>`
+        : `<li><span>${esc(a)}</span><span>${esc(b)}</span></li>`).join('');
+      panel.innerHTML = `<div class="kicker" style="color:${p.color}">Pod ${focus + 1} of ${PODS.length} · ${p.roles.length} desks</div><h2>${esc(p.title)}</h2>
+        <p class="blurb">${esc(p.blurb)}</p>
+        ${p.grid && p.grid().length ? `<div class="pkgs"><div class="pkgs-h">${p.grid().length} items</div><div class="pkgs-g">${p.grid().map(g => {
+            const facts = `${esc(g.sites)} site${g.sites === 1 ? '' : 's'}${g.local ? ` · ${esc(g.local)} local` : ''}`;
+            const main = g.href || (D.inline ? null : g.office);
+            const name = main ? `<a class="pkg-name" href="${esc(main)}"${/^https?:/.test(main) ? ' target="_blank" rel="noopener"' : ''}>${esc(g.name)}</a>` : `<b>${esc(g.name)}</b>`;
+            const office = (g.href && g.office && !D.inline) ? ` · <a class="pkg-office" href="${esc(g.office)}">office</a>` : '';
+            return `<div class="pkg" style="--c:${p.color}">${name}<span>${facts}${office}</span></div>`;
+          }).join('')}</div></div>` : ''}
+        <div class="desks">${p.roles.map(r => `<span>${esc(r)}</span>`).join('')}</div>
+        <div class="stats">${stat(p.big(), p.bigLabel)}${p.rows().map(([l, v]) => stat(v, l)).join('')}</div>
+        ${(p.links || []).filter(l => !(l.local && D.shared) && !(D.inline && !/^https?:/.test(l.href))).map(l => `<a class="btn podlink" href="${esc(l.href)}"${/^https?:/.test(l.href) ? ' target="_blank" rel="noopener"' : ''} style="--c:${p.color}">${esc(l.text)} &rarr;</a>`).join(' ')}
+        <ul class="list">${rows}</ul>
+        <button class="btn back" id="back">Back to the whole office</button>`;
+    }
+    document.getElementById('back').onclick = () => { howOpen = false; focusPod(-1); };
+  }
+  function renderCards() {
+    const now = performance.now();
+    pods.forEach((p, i) => {
+      const d = p.def;
+      const badge = p.badgeUntil > now ? p.badgeText : (d.id === 'leads' && waiting ? `${waiting} lead${waiting > 1 ? 's' : ''} waiting for a reply` : '');
+      p.card.innerHTML = `<div class="h"><i></i>${esc(d.name)}<em>${esc(d.roles.length)} desks</em></div>
+        <div class="big">${esc(d.big())}<small>${esc(d.bigLabel)}</small></div>
+        <div class="rows">${d.rows().map(([l, v]) => `<div><span>${esc(l)}</span><b>${esc(v)}</b></div>`).join('')}</div>
+        <div class="foot"><i></i>${esc(d.foot)}</div>
+        ${badge ? `<div class="badge">${esc(badge)}</div>` : ''}`;
+      p.card.classList.toggle('dim', focus >= 0 && focus !== i);
+      p.card.hidden = focus === i;
+      p.hasBadge = !!badge;
+    });
+  }
+
+  const v3 = new THREE.Vector3(), wp = new THREE.Vector3();
+  const toScreen = pos => { v3.copy(pos).project(cam); return [(v3.x * 0.5 + 0.5) * stage.clientWidth, (-v3.y * 0.5 + 0.5) * stage.clientHeight]; };
+  function placeCard(p) {
+    const [cx, cy] = toScreen(new THREE.Vector3(target.x, 0.3, target.z).set(0, 0.3, 0));
+    const [px, py] = toScreen(wp.copy(p.g.position).setY(0.3));
+    const [ex, ey] = toScreen(wp.copy(p.dir).multiplyScalar(R + POD_R + 0.4).setY(0.3));
+    let ux = px - cx, uy = py - cy; const len = Math.hypot(ux, uy) || 1; ux /= len; uy /= len;
+    const cw = p.card.offsetWidth, ch = p.card.offsetHeight, W = stage.clientWidth, H = stage.clientHeight;
+    let x = ex + (-0.5 + 0.5 * ux) * cw, y = ey + (-0.5 + 0.5 * uy) * ch;
+    const right = (!panel.hidden && W > 640) ? panel.getBoundingClientRect().left - 10 : W - 12;
+    x = Math.min(Math.max(12, x), right - cw);
+    y = Math.min(Math.max(W > 640 ? 96 : 56, y), H - ch - 10);
+    const f = feedRect;
+    if (f && x < f.right + 8 && x + cw > f.left - 8 && y + ch > f.top - 8) {
+      const upY = f.top - 8 - ch, rightX = f.right + 8;
+      const canUp = upY >= (W > 640 ? 96 : 56), canRight = rightX + cw <= right;
+      if (canRight && (!canUp || rightX - x < y - upY)) x = rightX; else if (canUp) y = upY;
+    }
+    const b = brandRect;
+    if (b && x < b.right + 8 && x + cw > b.left && y < b.bottom + 8) y = b.bottom + 8;
+    p.card.style.transform = 'none';
+    p.card.style.left = x + 'px'; p.card.style.top = y + 'px';
+  }
+  const feedEl = document.getElementById('feed'), brandEl = document.getElementById('brand');
+  let feedRect = null, brandRect = null;
+
+  const setPressed = (btn, on) => btn.setAttribute('aria-pressed', String(on));
+  document.getElementById('showroom').onclick = e => {
+    showroom = !showroom; setPressed(e.currentTarget, showroom);
+    renderCards(); renderPanel(); feedEls.forEach(x => x.refresh());
+  };
+
+  const KIND = { visit: ['Local visitor', '#3b82f6', 2], whatsapp: ['WhatsApp tap', '#22c55e', 1], call: ['Call tap', '#f59e0b', 0] };
+  const events = D.events.slice().sort((a, b) => a.t < b.t ? -1 : 1);
+  const waiting = events.filter(e => e.kind === 'whatsapp' && Date.now() - Date.parse(e.t) < 48 * 3600e3).length;
+  const feedlist = document.getElementById('feedlist');
+  const feedEls = [];
+  let ei = Math.max(0, events.length - 6);
+  function nextEvent() {
+    if (!events.length) return;
+    const ev = events[ei % events.length]; ei++;
+    const k = KIND[ev.kind] || KIND.visit;
+    const li = document.createElement('li');
+    const item = { li, refresh() {
+      const from = ev.src && ev.src !== 'direct' ? ' from ' + srcName(ev.src) : '';
+      li.innerHTML = `<i style="background:${k[1]}"></i><span>${esc(k[0])} · ${esc(nameDom(ev.dom))}${esc(from)}</span><em>${esc(ago(ev.t))}</em>`;
+    } };
+    item.refresh(); feedlist.prepend(li); feedEls.unshift(item);
+    while (feedEls.length > 5) feedEls.pop().li.remove();
+    pulse(k[2]);
+    if (ev.kind === 'whatsapp') { pods[1].badgeText = 'New WhatsApp lead · waiting for a reply'; pods[1].badgeUntil = performance.now() + 7000; renderCards(); }
+    if (ev.kind === 'call') { pods[0].badgeText = 'Missed call · MyElliot would answer'; pods[0].badgeUntil = performance.now() + 7000; renderCards(); }
+  }
+
+  renderCards(); renderPanel();
+  const clock = new THREE.Clock();
+  let sinceEvent = 0, sinceBadge = 0;
+  const lift = new THREE.Vector3();
+  function tick() {
+    const dt = Math.min(clock.getDelta(), 0.05), t = clock.elapsedTime, ease = 1 - Math.pow(0.002, dt);
+    target.lerp(targetGoal, ease); zoom += (zoomGoal - zoom) * ease;
+    frame();
+    const showTags = stage.clientWidth > 640 && pxPerUnit > 19;
+    { const r = feedEl.getBoundingClientRect(); feedRect = r.width ? r : null; }
+    brandRect = brandEl.getBoundingClientRect();
+    pods.forEach((p, i) => {
+      p.g.position.y = Math.sin(t * 0.7 + i * 1.1) * 0.05;
+      p.flash *= Math.pow(0.12, dt);
+      p.topMat.emissiveIntensity = 0.1 + p.flash * 0.8;
+      p.edgeMat.opacity = 0.45 + p.flash * 0.55;
+      for (const w of p.workers) {
+        const u = w.userData;
+        u.head.position.y = u.headY + Math.sin(t * 1.6 + u.phase) * 0.012;
+        u.arms[0].rotation.x = Math.sin(t * 13 + u.phase) * 0.12;
+        u.arms[1].rotation.x = Math.sin(t * 13 + u.phase + 1.7) * 0.12;
+        u.scrMat.color.copy(u.base).multiplyScalar(0.75 + 0.25 * Math.sin(t * 2.3 + u.phase));
+      }
+      placeCard(p);
+    });
+    for (const tg of tags) {
+      const on = showTags && (focus < 0 || focus === tg.podIdx);
+      tg.el.style.opacity = on ? 1 : 0;
+      if (!on) continue;
+      tg.worker.getWorldPosition(wp); wp.y += tg.big ? 2.0 : 1.45;
+      const [x, y] = toScreen(wp); tg.el.style.left = x + 'px'; tg.el.style.top = y + 'px';
+    }
+    gem.rotation.y += dt * 0.5; wire.rotation.y -= dt * 0.3; wire.rotation.x += dt * 0.12;
+    ring1.rotation.x = Math.PI / 2 + Math.sin(t * 0.6) * 0.3; ring2.rotation.y = t * 0.4; ring2.rotation.x = Math.PI / 2.6;
+    core.position.y = CORE.y + Math.sin(t * 0.9) * 0.15;
+    beam.material.opacity = 0.14 + Math.sin(t * 2) * 0.05;
+    lift.copy(core.position); lift.y += 3.1;
+    { const [x, y] = toScreen(lift); engineLabel.style.left = x + 'px'; engineLabel.style.top = y + 'px'; }
+    engineLabel.style.opacity = focus >= 0 ? 0.15 : 1;
+    for (let i = pulses.length - 1; i >= 0; i--) {
+      const q = pulses[i]; q.t += dt / 2.2;
+      if (q.t >= 1) { scene.remove(q.m); q.m.material.dispose(); pulses.splice(i, 1); gem.material.emissiveIntensity = 1.2; continue; }
+      q.m.position.copy(q.p.curve.getPoint(q.t));
+    }
+    gem.material.emissiveIntensity += (0.55 - gem.material.emissiveIntensity) * (1 - Math.pow(0.05, dt));
+    sinceEvent += dt; if (sinceEvent > 2.6) { sinceEvent = 0; nextEvent(); }
+    sinceBadge += dt;
+    if (sinceBadge > 1) { sinceBadge = 0; const now = performance.now(); if (pods.some(p => p.hasBadge && p.badgeUntil && p.badgeUntil < now)) { pods.forEach(p => { if (p.badgeUntil < now) p.badgeUntil = 0; }); renderCards(); } }
+    renderer.render(scene, cam);
+    requestAnimationFrame(tick);
+  }
+  const tickClock = () => { document.getElementById('clock').textContent = new Date().toLocaleTimeString('en-GB', { hour: '2-digit', minute: '2-digit', timeZone: D.tz || 'UTC' }) + ' ' + (D.tzLabel || ''); };
+  tickClock(); setInterval(tickClock, 15000);
+  for (let k = 0; k < 4; k++) nextEvent();
+  setInterval(() => {
+    if (focus >= 0 || compact || fitCheck > 0) return;
+    const rs = pods.filter(p => !p.card.hidden).map(p => p.card.getBoundingClientRect());
+    const hit = (A, B) => A.left < B.right && B.left < A.right && A.top < B.bottom && B.top < A.bottom;
+    if (rs.some((A, a) => rs.some((B, b) => b > a && hit(A, B)))) setCompact(true);
+  }, 1000);
+  setInterval(() => { if (fitCheck > 0) fitCheck = Math.max(0, fitCheck - 60); }, 1000);
+  tick();
+})();
+</script>
+</body>
+</html>
